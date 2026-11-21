@@ -5,6 +5,8 @@ import pdfplumber
 import pandas as pd
 from dotenv import load_dotenv
 from openai import OpenAI
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
 
@@ -29,6 +31,14 @@ SYSTEM_PROMPT = (
 chat_history = [
     {"role": "system", "content": SYSTEM_PROMPT}
 ]
+
+def get_system_prompt():
+    now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    today_str = now.strftime("%A, %B %d, %Y")
+    return (
+        f"You are a helpful AI assistant. Today's date is {today_str}. "
+        "Use this exact date for any calendar, day-of-week, or relative date questions."
+    )
 
 def extract_from_pdf(file_stream):
     extracted_parts = []
