@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Personal Assistant</title>
+    <link rel="stylesheet" href="{{url_for('static', filename='style.css')}}">
+</head>
+<body>
+    <h1 class="main_heading">AI Personal Assistant</h1>
+
+    <div class="container">
+        <h2>AI Chatbot</h2>
+        <div id="chat-box"></div>
+        <form id="askForm">
+            <input type="text" id="questionInput" name="question" placeholder="Type a message..." required>
+            <button type="submit">Send</button>
+            <button type="button" id="clearChatBtn" class="clear-btn">Clear Chat</button>
+        </form>
+        <p id="ans-loading" style="display:none;">Thinking...</p>
+
+        <hr>
+
+        <h2>Summarize Email</h2>
+        <form id="emailForm">
+            <textarea type="text" name="email" placeholder="Paste your email here.." required></textarea>
+            <button type="submit">Summarize</button>
+        </form>
+        <p id="summary-loading" style="display: none;">Processing...</p>
+        <p id="summary"></p>
+
+        <hr>
+
+        <hr>
+
+        <h2>Extract PDF / Excel / Financial Statements</h2>
+        <form id="extractForm">
+            <input type="file" name="file" accept=".pdf,.xlsx,.xls,.csv" required>
+            <input type="text" name="query" placeholder="Optional: Ask a question about this file (e.g., Total revenue?)">
+            <button type="submit">Extract & Analyze</button>
+        </form>
+        <p id="extract-loading" style="display: none;">Extracting and analyzing...</p>
+        <div id="extract-analysis" class="output-box" style="display: none;"></div>
+        <details id="raw-data-details" style="display: none; margin-top: 10px;">
+            <summary style="cursor: pointer; color: #4a90e2; font-weight: bold;">View Raw Extracted Text & Tables</summary>
+            <pre id="extracted-raw"></pre>
+        </details>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <script>
+        document.getElementById("askForm").onsubmit = async (e) => {
+            e.preventDefault();
+            let input = document.getElementById("questionInput");
+            let userText = input.value.trim();
+            if (!userText) return;
+
+            let chatBox = document.getElementById("chat-box");
+            let loading = document.getElementById("ans-loading");
+
+            // 1. Append user message bubble
+            let userBubble = document.createElement("div");
+            userBubble.className = "chat-msg user-msg";
+            userBubble.innerText = userText;
+            chatBox.appendChild(userBubble);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            let formData = new FormData(e.target);
+            input.value = ""; // clear input box
+            loading.style.display = "block";
+
+            // 2. Fetch AI reply
+            let res = await fetch("/ask", {
+                method: "POST",
+                body: formData
+            });
+            let data = await res.json();
+            loading.style.display = "none";
+
+            // 3. Append AI message bubble
+            let botBubble = document.createElement("div");
+            botBubble.className = "chat-msg bot-msg";
+            botBubble.innerHTML = marked.parse(data.response);
+            chatBox.appendChild(botBubble);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        };
+
+        document.getElementById("clearChatBtn").onclick = async () => {
+            await fetch("/clear_chat", { method: "POST" });
+            document.getElementById("chat-box").innerHTML = "";
+        };
+
+        document.getElementById("emailForm").onsubmit = async (e) => {
+            e.preventDefault();
+            let formData = new FormData(e.target);
+
+            let loading = document.getElementById("summary-loading");
+            loading.style.display = "block";
+
+            let res = await fetch("/summarize", {
+                method: "POST",
+                body: formData
+            });
+
+            let data = await res.json();
+            document.getElementById("summary").innerHTML = marked.parse(data.response);
+
+            loading.style.display = "none"; // hide loader
+        };
+
+        document.getElementById("extractForm").onsubmit = async (e) => {
+            e.preventDefault();
+            let formData = new FormData(e.target);
+
+            let loading = document.getElementById("extract-loading");
+            let analysisBox = document.getElementById("extract-analysis");
+            let rawDetails = document.getElementById("raw-data-details");
+            let rawBox = document.getElementById("extracted-raw");
+
+            loading.style.display = "block";
+            analysisBox.style.display = "none";
+            rawDetails.style.display = "none";
+
+            let res = await fetch("/extract", {
+                method: "POST",
+                body: formData
+            });
+
+            let data = await res.json();
+            loading.style.display = "none";
+
+            if (data.response) {
+                analysisBox.innerHTML = marked.parse(data.response);
+                analysisBox.style.display = "block";
+            } else {
+                analysisBox.innerHTML = marked.parse(data.analysis);
+                analysisBox.style.display = "block";
+                rawBox.innerText = data.extracted_text;
+                rawDetails.style.display = "block";
+            }
+        };
+    </script>
+</body>
+</html>
