@@ -1,12 +1,15 @@
 from flask import Flask, render_template, request, jsonify
 import os
 import io
+import re
 import pdfplumber
 import pandas as pd
 from dotenv import load_dotenv
 from openai import OpenAI
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
+from rag import RAGPipeline, load_knowledge_base
 
 app = Flask(__name__)
 
@@ -20,34 +23,78 @@ client = OpenAI(
     base_url="https://api.groq.com/openai/v1"
 )
 
-SYSTEM_PROMPT = (
-    "You are a helpful personal assistant. "
-    "Answer ONLY the user's latest message directly and concisely. "
-    "Use conversation history strictly for context when the user asks a follow-up or refers to earlier details. "
-    "Never repeat previous answers or restate earlier personal details unless the user explicitly asks for them."
-)
+MODEL_NAME = "openai/gpt-oss-120b"
 
-# ADD THIS RIGHT HERE:
-chat_history = [
-    {"role": "system", "content": SYSTEM_PROMPT}
-]
+# Load FAISS Knowledge Base for the RAG Chatbot panel
+kb_rag = load_knowledge_base(os.path.join(basedir, "knowledge.txt"))
 
-def get_system_prompt():
+
+def get_system_prompt(is_rag: bool = False) -> str:
     now = datetime.now(ZoneInfo("Asia/Kolkata"))
     today_str = now.strftime("%A, %B %d, %Y")
-    return (
-        f"You are a helpful AI assistant. Today's date is {today_str}. "
-        "Use this exact date for any calendar, day-of-week, or relative date questions."
+    base_prompt = (
+        f"You are a helpful personal assistant. Today's date is {today_str}. "
+        "Use this exact date for any calendar, day-of-week, or relative date questions. "
+        "Answer ONLY the user's latest message directly and concisely. "
+        "Use conversation history strictly for context when the user asks a follow-up or refers to earlier details. "
+        "Never repeat previous answers or restate earlier personal details unless the user explicitly asks for them."
     )
+    if is_rag:
+        base_prompt += (
+            " When Relevant Knowledge Base Context is provided, prioritize those retrieved facts accurately."
+        )
+    return base_prompt
+
+
+# Separate chat histories for Left (Normal) and Right (RAG) panels
+chat_history_normal = [{"role": "system", "content": get_system_prompt(is_rag=False)}]
+chat_history_rag = [{"role": "system", "content": get_system_prompt(is_rag=True)}]
+
+
+# --- PDF & Excel Extraction Helpers ---
+def _clean_cell_text(text: str) -> str:
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    cleaned = re.sub(r"\s*/\s*", "/", cleaned)
+    cleaned = re.sub(r"\(\s+", "(", cleaned)
+    cleaned = re.sub(r"\s+\)", ")", cleaned)
+    return cleaned
+
+
+def _should_merge_fragment(prev: str, curr: str) -> bool:
+    if not prev or not curr:
+        return False
+    if prev.endswith((" ", ".", ",", ":", ";", "-", "/", ")")):
+        return False
+    return len(curr) <= 10 and " " not in curr and (curr.islower() or curr.isupper())
+
+
+def format_pdf_tables(page) -> str:
+    tables = page.extract_tables() or []
+    formatted_rows = []
+    for table in tables:
+        for row in table:
+            if not row:
+                continue
+            cells = [_clean_cell_text(str(c)) for c in row if c and _clean_cell_text(str(c))]
+            if not cells:
+                continue
+            merged = []
+            for cell in cells:
+                if merged and _should_merge_fragment(merged[-1], cell):
+                    merged[-1] += cell
+                else:
+                    merged.append(cell)
+            deduped = []
+            for item in merged:
+                if not deduped or deduped[-1] != item:
+                    deduped.append(item)
+            if deduped:
+                formatted_rows.append(deduped[0] if len(deduped) == 1 else " | ".join(deduped))
+    return "\n".join(formatted_rows)
+
 
 def extract_from_pdf(file_stream):
     extracted_parts = []
-    table_settings = {
-        "vertical_strategy": "text",
-        "horizontal_strategy": "text",
-        "snap_tolerance": 3,
-    }
-
     with pdfplumber.open(file_stream) as pdf:
         for i, page in enumerate(pdf.pages, start=1):
             extracted_parts.append(f"--- Page {i} ---")
@@ -55,20 +102,12 @@ def extract_from_pdf(file_stream):
             if text:
                 extracted_parts.append(text)
 
-            tables = page.extract_tables(table_settings=table_settings)
-            for t_idx, table in enumerate(tables, start=1):
-                # Keep only rows that have at least one non-empty cell
-                valid_rows = [
-                    [str(cell).strip() if cell else "" for cell in row]
-                    for row in table
-                    if any(cell and str(cell).strip() for cell in row)
-                ]
-                if valid_rows:
-                    extracted_parts.append(f"\n[Table {t_idx} on Page {i}]")
-                    for clean_row in valid_rows:
-                        extracted_parts.append(" | ".join(clean_row))
+            table_text = format_pdf_tables(page)
+            if table_text:
+                extracted_parts.append(f"\n[Extracted Tables on Page {i}]\n{table_text}")
 
     return "\n".join(extracted_parts)
+
 
 def extract_from_excel(file_stream, filename):
     extracted_parts = []
@@ -83,47 +122,112 @@ def extract_from_excel(file_stream, filename):
             extracted_parts.append(df.to_string(index=False))
     return "\n\n".join(extracted_parts)
 
+
+# --- Routes ---
 @app.route("/")
 def hello_world():
     return render_template("index.html")
 
+
+# LEFT PANEL: Standard Chatbot (Without RAG)
 @app.route("/ask", methods=["POST"])
 def ask():
     try:
         if not api_key:
             return jsonify({"response": "Error: OPENAI_API_KEY is missing from your .env file!"}), 200
 
-        question = request.form.get("question")
-        chat_history.append({"role": "user", "content": question})
+        question = request.form.get("question", "").strip()
+        if not question:
+            return jsonify({"response": "Please enter a valid question."}), 200
 
-        # Keep system prompt + last 10 messages (without duplicating system prompt)
-        recent_messages = [chat_history[0]] + chat_history[1:][-10:]
-        
+        chat_history_normal[0]["content"] = get_system_prompt(is_rag=False)
+        chat_history_normal.append({"role": "user", "content": question})
+
+        recent_messages = [chat_history_normal[0]] + chat_history_normal[1:][-10:]
+
         response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=recent_messages,   # <-- Pass recent_messages here!
+            model=MODEL_NAME,
+            messages=recent_messages,
             temperature=0.7,
             max_tokens=512
         )
         answer = response.choices[0].message.content.strip()
-        chat_history.append({"role": "assistant", "content": answer})
+        chat_history_normal.append({"role": "assistant", "content": answer})
         return jsonify({"response": answer}), 200
     except Exception as e:
         return jsonify({"response": f"Backend Error: {str(e)}"}), 200
 
+
 @app.route("/clear_chat", methods=["POST"])
 def clear_chat():
-    chat_history.clear()
-    chat_history.append({"role": "system", "content": SYSTEM_PROMPT})
+    chat_history_normal.clear()
+    chat_history_normal.append({"role": "system", "content": get_system_prompt(is_rag=False)})
     return jsonify({"status": "cleared"}), 200
+
+
+# RIGHT PANEL: RAG Chatbot (With FAISS Knowledge Base)
+@app.route("/ask_rag", methods=["POST"])
+def ask_rag():
+    try:
+        if not api_key:
+            return jsonify({"response": "Error: OPENAI_API_KEY is missing from your .env file!", "sources_count": 0}), 200
+
+        question = request.form.get("question", "").strip()
+        if not question:
+            return jsonify({"response": "Please enter a valid question.", "sources_count": 0}), 200
+
+        chat_history_rag[0]["content"] = get_system_prompt(is_rag=True)
+
+        # Retrieve top relevant chunks from knowledge.txt using FAISS
+        retrieved_chunks = kb_rag.retrieve(question, top_k=3)
+
+        if retrieved_chunks:
+            context_block = "\n---\n".join(retrieved_chunks)
+            augmented_prompt = (
+                f"Relevant Knowledge Base Context:\n{context_block}\n\n"
+                f"User Question: {question}"
+            )
+        else:
+            augmented_prompt = question
+
+        chat_history_rag.append({"role": "user", "content": question})
+
+        # Send recent history + augmented current question
+        recent_messages = [chat_history_rag[0]] + chat_history_rag[1:-1][-9:] + [
+            {"role": "user", "content": augmented_prompt}
+        ]
+
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=recent_messages,
+            temperature=0.5,
+            max_tokens=512
+        )
+        answer = response.choices[0].message.content.strip()
+        chat_history_rag.append({"role": "assistant", "content": answer})
+
+        return jsonify({
+            "response": answer,
+            "sources_count": len(retrieved_chunks)
+        }), 200
+    except Exception as e:
+        return jsonify({"response": f"Backend Error: {str(e)}", "sources_count": 0}), 200
+
+
+@app.route("/clear_chat_rag", methods=["POST"])
+def clear_chat_rag():
+    chat_history_rag.clear()
+    chat_history_rag.append({"role": "system", "content": get_system_prompt(is_rag=True)})
+    return jsonify({"status": "cleared"}), 200
+
 
 @app.route("/summarize", methods=["POST"])
 def summarize():
     try:
-        email_text = request.form.get("email")
-        prompt = f"summarize the following email in 2-3 sentences: {email_text}"
+        email_text = request.form.get("email", "").strip()
+        prompt = f"Summarize the following email in 2-3 sentences: {email_text}"
         response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model=MODEL_NAME,
             messages=[
                 {"role": "system", "content": "Act like an expert email assistant"},
                 {"role": "user", "content": prompt}
@@ -135,6 +239,7 @@ def summarize():
         return jsonify({"response": summary}), 200
     except Exception as e:
         return jsonify({"response": f"Backend Error: {str(e)}"}), 200
+
 
 @app.route("/extract", methods=["POST"])
 def extract():
@@ -161,15 +266,26 @@ def extract():
         if not extracted_data.strip():
             return jsonify({"response": "No text or tables could be extracted from this file."}), 200
 
-        # Limit text sent to LLM to avoid token limit errors on huge files
-        truncated_data = extracted_data[:12000]
-        instruction = user_query if user_query else "Summarize the key figures, tables, and financial insights from this document."
+        # Use FAISS RAG for large documents when a specific question is asked
+        doc_rag = RAGPipeline(chunk_size=800, overlap=120)
+        num_chunks = doc_rag.build_index(extracted_data)
+
+        if user_query and num_chunks > 3:
+            top_chunks = doc_rag.retrieve(user_query, top_k=4, min_score=0.05)
+            context_for_llm = "\n---\n".join(top_chunks) if top_chunks else extracted_data[:12000]
+            prompt = (
+                f"Answer the question using ONLY the retrieved document sections below:\n\n"
+                f"{context_for_llm}\n\nQuestion: {user_query}"
+            )
+        else:
+            instruction = user_query if user_query else "Summarize the key figures, tables, and financial insights from this document."
+            prompt = f"{instruction}\n\nDocument Content:\n{extracted_data[:12000]}"
 
         response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model=MODEL_NAME,
             messages=[
                 {"role": "system", "content": "You are an expert financial and document analyst. Extract and present key numbers and insights clearly."},
-                {"role": "user", "content": f"{instruction}\n\nDocument Content:\n{truncated_data}"}
+                {"role": "user", "content": prompt}
             ],
             temperature=0.2,
             max_tokens=1024
@@ -184,6 +300,6 @@ def extract():
     except Exception as e:
         return jsonify({"response": f"Backend Error: {str(e)}"}), 200
 
+
 if __name__ == "__main__":
     app.run(debug=True)
-

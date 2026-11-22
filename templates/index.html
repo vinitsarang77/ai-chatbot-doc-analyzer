@@ -11,13 +11,37 @@
 
     <div class="container">
         <h2>AI Chatbot</h2>
-        <div id="chat-box"></div>
-        <form id="askForm">
-            <input type="text" id="questionInput" name="question" placeholder="Type a message..." required>
-            <button type="submit">Send</button>
-            <button type="button" id="clearChatBtn" class="clear-btn">Clear Chat</button>
-        </form>
-        <p id="ans-loading" style="display:none;">Thinking...</p>
+        <div class="chat-split-wrapper">
+            <!-- LEFT PANEL: WITHOUT RAG -->
+            <div class="chat-panel">
+                <div class="panel-header">
+                    <h3>Standard Chatbot</h3>
+                    <span class="badge badge-no-rag">Without RAG</span>
+                </div>
+                <div id="chat-box-normal" class="chat-box"></div>
+                <form id="askFormNormal" class="chat-form">
+                    <input type="text" id="questionInputNormal" name="question" placeholder="Ask without RAG..." required>
+                    <button type="submit">Send</button>
+                    <button type="button" id="clearChatNormalBtn" class="clear-btn">Clear</button>
+                </form>
+                <p id="ans-loading-normal" class="loading-text" style="display:none;">Thinking...</p>
+            </div>
+
+            <!-- RIGHT PANEL: WITH RAG -->
+            <div class="chat-panel">
+                <div class="panel-header">
+                    <h3>Knowledge-Grounded Chatbot</h3>
+                    <span class="badge badge-rag">With FAISS RAG</span>
+                </div>
+                <div id="chat-box-rag" class="chat-box"></div>
+                <form id="askFormRag" class="chat-form">
+                    <input type="text" id="questionInputRag" name="question" placeholder="Ask with RAG (uses knowledge.txt)..." required>
+                    <button type="submit">Send</button>
+                    <button type="button" id="clearChatRagBtn" class="clear-btn">Clear</button>
+                </form>
+                <p id="ans-loading-rag" class="loading-text" style="display:none;">Retrieving & thinking...</p>
+            </div>
+        </div>
 
         <hr>
 

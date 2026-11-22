@@ -1,0 +1,11 @@
+Vinit Sarang is a Computer Science M.Tech graduate from Sardar Vallabhbhai National Institute of Technology (SVNIT), Surat (2024–2026) with an 8.26 CGPA. He completed his B.E. in Computer Science and Engineering from R.N.G. Patel Institute of Technology, Bardoli, Gujarat (2020–2024) with an 8.32 CGPA.
+
+Vinit interned as an Associate Software Intern at Casepoint Pvt. Ltd. in Surat, Gujarat from January 2024 to June 2024. He worked on backend services, SQL query optimization, RESTful APIs, C#, .NET Core, PostgreSQL, Redis, RabbitMQ, ElasticSearch, and Azure DevOps for the TestCraft online assessment platform.
+
+Vinit built SnapClass, an AI-powered smart attendance web application using Python, Streamlit, Supabase, and computer vision facial recognition.
+
+Vinit built this AI Personal Assistant web application using Python, Flask, Groq API (openai/gpt-oss-120b), FAISS RAG, scikit-learn, pdfplumber, and pandas, deployed on Render with Gunicorn. It features a side-by-side Standard vs. RAG Chatbot, an Email Summarizer, and a PDF/Excel/CSV Document Analyzer.
+
+Vinit developed a Human Activity Recognition (HAR) project using Python, OpenCV, NumPy, TensorFlow (CNN), and Scikit-learn (Random Forest), achieving 78% classification accuracy.
+
+Vinit's technical skills include Python, C++, C#, Java, SQL, JavaScript, HTML5, CSS3, Flask, .NET Core, PostgreSQL, MySQL, MongoDB, Supabase, Redis, RabbitMQ, TensorFlow, PyTorch, Scikit-learn, OpenCV, FAISS, Git, GitHub, and Google Cloud Platform (GCP).
