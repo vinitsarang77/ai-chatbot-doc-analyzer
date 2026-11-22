@@ -37,6 +37,7 @@ A full-stack Flask web application powered by LLMs via the Groq API (`openai/gpt
 │   └── script.js        # Client-side fetch handlers and Markdown rendering
 └── templates/
     └── index.html       # Frontend UI layout
+```
 
 ## RAG Evaluation Benchmarks (`eval_rag.py`)
 Evaluated using an LLM-as-a-Judge pipeline (`openai/gpt-oss-120b`) over a golden Q&A set grounded in `knowledge.txt`:
