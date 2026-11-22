@@ -9,39 +9,31 @@ class RAGPipeline:
     def __init__(self, chunk_size: int = 450, overlap: int = 80):
         self.chunk_size = chunk_size
         self.overlap = overlap
-        self.vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
+        self.vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 1))
         self.index = None
         self.chunks = []
 
     def chunk_text(self, text: str) -> list[str]:
-        """Split text into overlapping chunks while preserving paragraph boundaries."""
+        """Split text into chunks while preserving paragraph boundaries."""
         cleaned = re.sub(r"\n{3,}", "\n\n", text).strip()
         if not cleaned:
             return []
 
         paragraphs = [p.strip() for p in cleaned.split("\n\n") if p.strip()]
         chunks = []
-        current_chunk = ""
+
 
         for para in paragraphs:
-            if len(current_chunk) + len(para) + 1 <= self.chunk_size:
-                current_chunk = f"{current_chunk}\n{para}".strip()
+            if len(para) <= self.chunk_size:
+                chunks.append(para)
             else:
-                if current_chunk:
-                    chunks.append(current_chunk)
-                # Sliding window for very long single paragraphs
-                if len(para) > self.chunk_size:
-                    start = 0
-                    while start < len(para):
-                        end = start + self.chunk_size
-                        chunks.append(para[start:end].strip())
-                        start += self.chunk_size - self.overlap
-                    current_chunk = ""
-                else:
-                    current_chunk = para
 
-        if current_chunk:
-            chunks.append(current_chunk)
+                # Sliding window for very long single paragraphs
+                start = 0
+                while start < len(para):
+                    end = start + self.chunk_size
+                    chunks.append(para[start:end].strip())
+                    start += self.chunk_size - self.overlap
 
         return chunks
 
@@ -63,7 +55,7 @@ class RAGPipeline:
         self.index.add(embeddings)
         return len(self.chunks)
 
-    def retrieve(self, query: str, top_k: int = 3, min_score: float = 0.08) -> list[str]:
+    def retrieve(self, query: str, top_k: int = 3, min_score: float = 0.15) -> list[str]:
         """Embed query and retrieve top-k relevant chunks from FAISS."""
         if not self.index or not self.chunks or not query.strip():
             return []
