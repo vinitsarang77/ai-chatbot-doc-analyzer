@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Personal Assistant</title>
-    <link rel="stylesheet" href="{{url_for('static', filename='style.css')}}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <h1 class="main_heading">AI Personal Assistant</h1>
@@ -47,28 +47,51 @@
 
         <h2>Summarize Email</h2>
         <form id="emailForm">
-            <textarea type="text" name="email" placeholder="Paste your email here.." required></textarea>
+            <textarea name="email" placeholder="Paste your email here.." required></textarea>
             <button type="submit">Summarize</button>
         </form>
         <p id="summary-loading" style="display: none;">Processing...</p>
         <p id="summary"></p>
 
-        <hr>
-
+        
         <hr>
 
         <h2>Extract PDF / Excel / Financial Statements</h2>
-        <form id="extractForm">
-            <input type="file" name="file" accept=".pdf,.xlsx,.xls,.csv" required>
-            <input type="text" name="query" placeholder="Optional: Ask a question about this file (e.g., Total revenue?)">
-            <button type="submit">Extract & Analyze</button>
-        </form>
-        <p id="extract-loading" style="display: none;">Extracting and analyzing...</p>
-        <div id="extract-analysis" class="output-box" style="display: none;"></div>
-        <details id="raw-data-details" style="display: none; margin-top: 10px;">
-            <summary style="cursor: pointer; color: #4a90e2; font-weight: bold;">View Raw Extracted Text & Tables</summary>
-            <pre id="extracted-raw"></pre>
-        </details>
+        <div class="chat-split-wrapper">
+            <!-- LEFT PANEL: EXTRACT WITHOUT RAG -->
+            <div class="chat-panel">
+                <div class="panel-header">
+                    <h3>Standard Document Analyzer</h3>
+                    <span class="badge badge-no-rag">Without RAG</span>
+                </div>
+                <form id="extractForm">
+                    <input type="file" name="file" accept=".pdf,.xlsx,.xls,.csv" required>
+                    <input type="text" name="query" placeholder="Optional: Ask a question about this file (e.g., Total revenue?)">
+                    <button type="submit">Extract & Analyze</button>
+                </form>
+                <p id="extract-loading" class="loading-text" style="display: none;">Extracting and analyzing...</p>
+                <div id="extract-analysis" class="output-box" style="display: none;"></div>
+                <details id="raw-data-details" style="display: none; margin-top: 10px;">
+                    <summary style="cursor: pointer; color: #4a90e2; font-weight: bold;">View Raw Extracted Text & Tables</summary>
+                    <pre id="extracted-raw"></pre>
+                </details>
+            </div>
+
+            <!-- RIGHT PANEL: EXTRACT WITH RAG (COMING SOON) -->
+            <div class="chat-panel">
+                <div class="panel-header">
+                    <h3>RAG Document Analyzer</h3>
+                    <span class="badge badge-rag">With FAISS RAG</span>
+                </div>
+                <div class="coming-soon-box">
+                    <div class="coming-soon-icon">🚀</div>
+                    <h4 class="coming-soon-title">Coming Soon...</h4>
+                    <p class="coming-soon-text">
+                        This feature is coming soon! Stay tuned for chunked FAISS vector search over large PDFs, multi-sheet Excel workbooks, and financial reports.
+                    </p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <footer class="footer-card">
@@ -82,6 +105,6 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 
-    
+
 </body>
 </html>
