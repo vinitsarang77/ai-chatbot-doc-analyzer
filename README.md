@@ -49,4 +49,4 @@ Evaluated using an LLM-as-a-Judge pipeline (`openai/gpt-oss-120b`) over a golden
 | **Faithfulness** | 1.00 | **1.00** |
 | **Answer Relevance** | 0.78 | **1.00** |
 | **Avg Retrieval Time** | 1.6 ms | **2.6 ms** |
-| **Avg Generation Time** | 808 ms | **999 ms** |
+| **Avg Generation Time** | 808 ms | **902 ms** |
